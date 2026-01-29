@@ -7,6 +7,9 @@ const routes = require('./routes');
 
 const app = express();
 
+// Enable trust proxy for Render/proxies to get accurate req.protocol
+app.set('trust proxy', true);
+
 // --------------------
 // Global Middlewares
 // --------------------

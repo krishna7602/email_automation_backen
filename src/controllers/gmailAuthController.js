@@ -2,6 +2,17 @@ const { oauth2Client, gmail } = require('../config/gmail');
 const GmailToken = require('../models/GmailToken');
 
 exports.startAuth = (req, res) => {
+  // 🔹 Use current request to determine redirect URI
+  const protocol = req.protocol === 'http' && req.get('host').includes('render.com') ? 'https' : req.protocol;
+  const host = req.get('host');
+  const dynamicRedirectUri = `${protocol}://${host}/api/auth/gmail/callback`;
+  
+  // Use dynamic unless specifically overridden in a way that suggests manual control
+  const redirectUri = dynamicRedirectUri;
+  
+  logger.info(`Using OAuth Redirect URI: ${redirectUri}`);
+  oauth2Client.redirectUri = redirectUri;
+
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
@@ -16,6 +27,11 @@ exports.startAuth = (req, res) => {
 exports.oauthCallback = async (req, res) => {
   try {
     const { code } = req.query;
+
+    // 🔹 Ensure redirectUri matches what was used in startAuth
+    const protocol = req.protocol === 'http' && req.get('host').includes('render.com') ? 'https' : req.protocol;
+    const host = req.get('host');
+    oauth2Client.redirectUri = `${protocol}://${host}/api/auth/gmail/callback`;
 
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);

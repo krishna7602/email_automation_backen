@@ -78,7 +78,12 @@ class AIService {
         logger.error('AI JSON Parsing Failed', { error: error.message });
         return null;
       } else {
-        logger.error('OpenAI Extraction Failed', { error: error.message });
+        logger.error('OpenAI Extraction Failed', { 
+          message: error.message,
+          type: error.type,
+          code: error.code,
+          status: error.status
+        });
         throw error;
       }
     }
