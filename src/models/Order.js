@@ -52,6 +52,16 @@ const OrderSchema = new mongoose.Schema({
   rawExtraction: {
     type: mongoose.Schema.Types.Mixed // Store full AI JSON response
   },
+  salesforceId: {
+    type: String,
+    default: null
+  },
+  syncStatus: {
+    type: String,
+    enum: ['pending', 'synced', 'failed'],
+    default: 'pending'
+  },
+  syncError: String,
   createdAt: {
     type: Date,
     default: Date.now

@@ -79,6 +79,41 @@ class OrderController {
       return errorResponse(res, error.message, 500);
     }
   }
+
+  async getOrderStats(req, res) {
+    try {
+      const stats = await Order.aggregate([
+        {
+          $group: {
+            _id: null,
+            totalOrders: { $sum: 1 },
+            syncedOrders: {
+              $sum: { $cond: [{ $eq: ['$syncStatus', 'synced'] }, 1, 0] }
+            },
+            pendingSync: {
+              $sum: { $cond: [{ $eq: ['$syncStatus', 'pending'] }, 1, 0] }
+            },
+            avgConfidence: { $avg: '$aiConfidence' },
+            totalRevenue: { $sum: '$totalAmount' }
+          }
+        }
+      ]);
+
+      const result = stats[0] || {
+        totalOrders: 0,
+        syncedOrders: 0,
+        pendingSync: 0,
+        avgConfidence: 0,
+        totalRevenue: 0
+      };
+
+      delete result._id;
+      return successResponse(res, result);
+    } catch (error) {
+      logger.error('Error fetching order stats:', error);
+      return errorResponse(res, error.message, 500);
+    }
+  }
 }
 
 module.exports = new OrderController();

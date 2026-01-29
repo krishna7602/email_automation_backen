@@ -5,6 +5,7 @@ const Email = require('../models/Email');
 const attachmentFetcher = require('../services/attachmentFetcher');
 const aiService = require('../services/aiService');
 const Order = require('../models/Order');
+const salesforceService = require('../services/salesforceService');
 
 class EmailController {
   constructor() {
@@ -360,6 +361,15 @@ async processEmailAsync(emailData, trackingId, files = []) {
             dbName: mongoose.connection.name,
             confidence: orderData.confidence 
           });
+
+          // Sync to Salesforce (Fire and forget, or handle errors)
+          try {
+            salesforceService.syncOrder(order).catch(err => {
+              logger.error('Background Salesforce sync failed', { error: err.message, orderId: order._id });
+            });
+          } catch (sfErr) {
+            logger.error('Triggering Salesforce sync failed', { error: sfErr.message });
+          }
           
           return order;
       } else {
@@ -403,6 +413,16 @@ async processEmailAsync(emailData, trackingId, files = []) {
 
       await order.save();
       logger.info('Email manually converted to order', { orderId: order._id });
+
+      // Sync to Salesforce
+      try {
+        salesforceService.syncOrder(order).catch(err => {
+          logger.error('Manual Salesforce sync failed', { error: err.message });
+        });
+      } catch (sfErr) {
+        logger.error('Triggering manual Salesforce sync failed', { error: sfErr.message });
+      }
+
       return successResponse(res, order, 'Email converted to order manually');
     } catch (err) {
       return errorResponse(res, err.message, 500);
