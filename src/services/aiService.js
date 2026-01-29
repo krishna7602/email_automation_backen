@@ -54,6 +54,9 @@ class AIService {
         }
         
         If this text does not appear to be an order, return {"confidence": 0}.
+        
+        CRITICAL: Ensure that the sum of (quantity * unitPrice) for all items exactly matches the totalAmount. If the email includes tax or shipping, include them as separate line items if possible, or ensure totalAmount reflects the full sum.
+        
         Return ONLY the JSON.
       `;
 

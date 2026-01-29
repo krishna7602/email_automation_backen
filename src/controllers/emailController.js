@@ -354,13 +354,24 @@ async processEmailAsync(emailData, trackingId, files = []) {
             customerData.email = email.from;
           }
 
+          // 3. Normalize items and calculate total if AI total is missing/inconsistent
+          const items = (orderData.items || []).map(item => ({
+            ...item,
+            totalPrice: item.totalPrice || (item.quantity * item.unitPrice) || 0
+          }));
+
+          const calculatedTotal = items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
+          const finalTotal = (orderData.totalAmount && Math.abs(orderData.totalAmount - calculatedTotal) < 0.01) 
+            ? orderData.totalAmount 
+            : (calculatedTotal || orderData.totalAmount || 0);
+
           const order = new Order({
             emailId: email._id,
             emailTrackingId: email.trackingId,
             extractedOrderId: orderData.extractedOrderId,
             customer: customerData,
-            items: orderData.items,
-            totalAmount: orderData.totalAmount || 0,
+            items: items,
+            totalAmount: finalTotal,
             currency: orderData.currency || 'USD',
             orderDate: orderData.orderDate ? new Date(orderData.orderDate) : new Date(),
             status: 'draft',
