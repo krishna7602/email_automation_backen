@@ -345,6 +345,11 @@ async processEmailAsync(emailData, trackingId, files = []) {
       // Lowered threshold to 0.2 to capture simpler orders
       if (orderData && orderData.confidence >= 0.2) {
           const customerData = orderData.customer || {};
+          
+          // Fallback to sender data if AI extraction is missing fields
+          if (!customerData.name && email.senderName) {
+            customerData.name = email.senderName;
+          }
           if (!customerData.email && email.from) {
             customerData.email = email.from;
           }

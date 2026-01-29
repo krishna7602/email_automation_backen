@@ -16,7 +16,7 @@ class OrderController {
         .sort({ createdAt: -1 })
         .limit(limit)
         .skip((page - 1) * limit)
-        .populate('emailId', 'subject from receivedAt');
+        .populate('emailId', 'subject from receivedAt senderName');
 
       const total = await Order.countDocuments(query);
 
