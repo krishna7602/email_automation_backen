@@ -1,0 +1,64 @@
+require('dotenv').config();
+
+const app = require('./src/app');
+const logger = require('./src/utils/logger');
+const { connectDB } = require('./src/config/db');
+const { loadGmailTokens } = require('./src/config/gmail');
+const gmailFetcher = require('./src/services/gmailFetcher');
+
+const PORT = process.env.PORT || 3000;
+
+const startServer = async () => {
+  try {
+    // 1️⃣ Connect DB
+    await connectDB();
+    logger.info('MongoDB connected');
+
+    // 2️⃣ Load Gmail OAuth tokens into memory (🔥 REQUIRED)
+    await loadGmailTokens();
+
+    // 3️⃣ Start HTTP server
+    const server = app.listen(PORT, () => {
+      logger.info(
+        `🚀 Server running on port ${PORT} in ${process.env.NODE_ENV} mode`
+      );
+      console.log(`🚀 http://localhost:${PORT}`);
+    });
+
+    // 4️⃣ Gmail polling (Sequential to avoid overlapping and rate limits)
+    if (process.env.ENABLE_GMAIL_POLLING === 'true') {
+      logger.info('📧 Gmail polling enabled');
+
+      const pollGmail = async () => {
+        try {
+          logger.info('Checking for new emails...');
+          await gmailFetcher.fetchUnreadEmails();
+        } catch (err) {
+          logger.error('Gmail polling failed', err);
+        } finally {
+          // Schedule next poll only after current one is done
+          setTimeout(pollGmail, 30 * 1000);
+        }
+      };
+
+      pollGmail();
+    }
+
+    // 5️⃣ Safety net
+    process.on('unhandledRejection', err => {
+      logger.error('Unhandled Rejection', {
+        error: err.message,
+        stack: err.stack
+      });
+      server.close(() => process.exit(1));
+    });
+
+  } catch (err) {
+    logger.error('Server startup failed', {
+      error: err.message
+    });
+    process.exit(1);
+  }
+};
+
+startServer();
