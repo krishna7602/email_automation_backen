@@ -354,16 +354,36 @@ async processEmailAsync(emailData, trackingId, files = []) {
             customerData.email = email.from;
           }
 
-          // 3. Normalize items and calculate total if AI total is missing/inconsistent
-          const items = (orderData.items || []).map(item => ({
-            ...item,
-            totalPrice: item.totalPrice || (item.quantity * item.unitPrice) || 0
-          }));
+          // 3. Helper to sanitize and parse numbers safely
+          const parseSafeNumber = (val) => {
+            if (typeof val === 'number') return val;
+            if (typeof val !== 'string') return 0;
+            const cleaned = val.replace(/,/g, '').replace(/[^\d.-]/g, '');
+            const num = parseFloat(cleaned);
+            return isNaN(num) ? 0 : num;
+          };
+
+          // 4. Normalize items and calculate total with safe parsing
+          const items = (orderData.items || []).map(item => {
+            const qty = parseSafeNumber(item.quantity);
+            const price = parseSafeNumber(item.unitPrice);
+            const itemTotal = parseSafeNumber(item.totalPrice) || (qty * price);
+            
+            return {
+              ...item,
+              quantity: qty || 1, // Default to 1 if we have a price but no qty
+              unitPrice: price,
+              totalPrice: itemTotal
+            };
+          });
 
           const calculatedTotal = items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
-          const finalTotal = (orderData.totalAmount && Math.abs(orderData.totalAmount - calculatedTotal) < 0.01) 
-            ? orderData.totalAmount 
-            : (calculatedTotal || orderData.totalAmount || 0);
+          const aiTotal = parseSafeNumber(orderData.totalAmount);
+          
+          // Use calculated total if AI total is missing or significantly different
+          const finalTotal = (aiTotal > 0 && Math.abs(aiTotal - calculatedTotal) < 1) 
+            ? aiTotal 
+            : (calculatedTotal || aiTotal || 0);
 
           const order = new Order({
             emailId: email._id,
