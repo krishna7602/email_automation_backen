@@ -62,9 +62,20 @@ class EmailParser {
       .map(([word, count]) => ({ word, count }));
   }
 
-  extractSenderName(email) {
-    if (!email) return 'Unknown';
-    const name = email.split('@')[0].replace(/[._]/g, ' ');
+  extractSenderName(fromValue) {
+    if (!fromValue) return 'Unknown';
+    
+    // 1. Handle "Name <email@example.com>" format
+    if (fromValue.includes('<')) {
+      let namePart = fromValue.split('<')[0].trim();
+      // Remove surrounding quotes if present
+      namePart = namePart.replace(/^["']|["']$/g, '').trim();
+      if (namePart) return namePart;
+    }
+
+    // 2. Handle "email@example.com" format (fallback to part before @)
+    const emailOnly = fromValue.includes('<') ? fromValue.match(/<([^>]+)>/)?.[1] : fromValue;
+    const name = (emailOnly || fromValue).split('@')[0].replace(/[._]/g, ' ');
     return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   }
 
