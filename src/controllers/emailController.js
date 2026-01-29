@@ -15,6 +15,7 @@ class EmailController {
     this.getEmailByTrackingId = this.getEmailByTrackingId.bind(this);
     this.deleteEmail = this.deleteEmail.bind(this);
     this.reprocessEmail = this.reprocessEmail.bind(this);
+    this.convertToOrderManually = this.convertToOrderManually.bind(this);
     this._attemptOrderExtraction = this._attemptOrderExtraction.bind(this);
   }
   async receiveEmail(req, res) {
