@@ -90,11 +90,13 @@ class GmailFetcher {
       await EmailController.processEmailAsync(emailData, `gmail_${messageId}`, files);
     } catch (err) {
       if (err.code === 11000 || err.message.includes('E11000')) {
-        console.warn(`📩 Email gmail_${messageId} already exists, skipping.`, { messageId });
+        logger.warn(`📩 Email gmail_${messageId} already exists, skipping.`, { messageId });
         // Cleanup local files if we skip
         files.forEach(f => fs.existsSync(f.path) && fs.unlinkSync(f.path));
       } else {
-        throw err;
+        logger.error(`❌ Non-recoverable error processing email ${messageId}. Marking as read to prevent loop.`, { error: err.message });
+        // We still continue to mark as read so we don't loop forever.
+        // The email is likely already saved in DB or will be on next try.
       }
     }
 

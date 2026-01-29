@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const logger = require('../utils/logger');
 const { successResponse, errorResponse } = require('../utils/responseHelper');
 const emailParser = require('../services/emailParser');
@@ -320,6 +321,13 @@ async processEmailAsync(emailData, trackingId, files = []) {
 
   async _attemptOrderExtraction(email) {
     try {
+      // 1. Check if an order already exists for this email
+      const existingOrder = await Order.findOne({ emailId: email._id });
+      if (existingOrder) {
+        logger.info('Order already exists for this email, skipping extraction', { emailId: email._id });
+        return existingOrder;
+      }
+
       logger.info('Attempting AI Order Extraction', { emailId: email._id });
 
       let fullText = email.body || '';
