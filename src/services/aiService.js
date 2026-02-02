@@ -21,41 +21,46 @@ class AIService {
     try {
       const prompt = `
         Act as an automated order entry system. 
-        Analyze the following email content (body and attachment text) and extract order details.
+        Analyze the following email content and extract EVERY individual order item.
         
         Content:
         """
         ${text.substring(0, 30000)} 
         """
         
-        Return a valid JSON object with the following structure:
+        CRITICAL PARSING RULES:
+        1. This text often contains TABULAR data where each line represents a different Order and Customer.
+        2. YOU MUST EXTRACT EVERY SINGLE ROW AS A SEPARATE INDEPENDENT ORDER.
+        3. Do NOT merge rows. Do NOT summarize. Do NOT stop after the first item.
+        4. Match these columns carefully: OrderID | CustomerName | Email | SKU | Quantity | Price | Total | Address
+        
+        DATA EXAMPLE (If you see this, extract 4 SEPARATE order objects):
+        ORD-001 John Doe john@test.com WIDGET-A 5 10 50 123 Main St
+        ORD-002 Jane Smith jane@test.com GADGET-B 1 150 150 456 Elm St
+        ORD-003 Björn Borg bjorn@test.se RACKET-X 2 200 400 Storgatan 1
+        ORD-004 Li Wei li.wei@test.cn TEA-SET 1 45.5 45.5 88 Nanjing Rd
+        
+        JSON STRUCTURE TO RETURN:
+        Return an object with an "orders" array:
         {
-          "extractedOrderId": "string or null",
-          "customer": {
-            "name": "string or null",
-            "email": "string or null",
-            "phone": "string or null",
-            "address": "string or null",
-            "company": "string or null"
-          },
-          "items": [
+          "orders": [
             {
-              "description": "string",
-              "quantity": number,
-              "unitPrice": number,
-              "totalPrice": number,
-              "sku": "string or null"
-            }
-          ],
-          "totalAmount": number,
-          "currency": "string (e.g., USD, EUR)",
-          "orderDate": "ISO date string or null",
-          "confidence": number (0-1 score of how likely this is an order)
+              "extractedOrderId": "string",
+              "customer": { 
+                "name": "string",
+                "email": "string",
+                "address": "string"
+              },
+              "items": [
+                 { "description": "string", "quantity": number, "unitPrice": number, "totalPrice": number, "sku": "string" }
+              ],
+              "totalAmount": number,
+              "currency": "USD",
+              "confidence": 1.0
+            },
+            ... (one per independent order found)
+          ]
         }
-        
-        If this text does not appear to be an order, return {"confidence": 0}.
-        
-        CRITICAL: Ensure that the sum of (quantity * unitPrice) for all items exactly matches the totalAmount. If the email includes tax or shipping, include them as separate line items if possible, or ensure totalAmount reflects the full sum.
         
         Return ONLY the JSON.
       `;
@@ -73,7 +78,10 @@ class AIService {
       const textResponse = response.choices[0].message.content;
       const json = JSON.parse(textResponse);
       
-      logger.info('Order extracted successfully with OpenAI');
+      logger.info('Order extracted successfully with OpenAI', { 
+        extractedItems: json.items?.length,
+        totalAmount: json.totalAmount
+      });
       return json;
 
     } catch (error) {

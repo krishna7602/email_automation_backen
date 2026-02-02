@@ -72,7 +72,7 @@ const OrderSchema = new mongoose.Schema({
   }
 });
 
-// 🔹 PREVENT DUPLICATE ORDERS: Ensure only one order per email
-OrderSchema.index({ emailId: 1 }, { unique: true });
+// 🔹 ALLOW MULTIPLE ORDERS PER EMAIL
+OrderSchema.index({ emailId: 1 });
 
 module.exports = mongoose.model('Order', OrderSchema);

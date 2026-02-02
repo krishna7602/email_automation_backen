@@ -321,18 +321,10 @@ async processEmailAsync(emailData, trackingId, files = []) {
 
   async _attemptOrderExtraction(email) {
     try {
-      // 1. Check if an order already exists for this email
-      const existingOrder = await Order.findOne({ emailId: email._id });
-      if (existingOrder) {
-        logger.info('Order already exists for this email, skipping extraction', { emailId: email._id });
-        return existingOrder;
-      }
-
       logger.info('Attempting AI Order Extraction', { emailId: email._id });
 
       let fullText = email.body || '';
       
-      // Append attachment text if available
       if (email.attachments && email.attachments.length > 0) {
         const attachmentTexts = email.attachments
           .map(a => `[Attachment: ${a.originalName}]\n${a.extractedText || ''}`)
@@ -340,91 +332,62 @@ async processEmailAsync(emailData, trackingId, files = []) {
         fullText += `\n\n--- ATTACHMENTS ---\n${attachmentTexts}`;
       }
 
-      const orderData = await aiService.extractOrderDetails(fullText);
-
-      // Lowered threshold to 0.2 to capture simpler orders
-      if (orderData && orderData.confidence >= 0.2) {
-          const customerData = orderData.customer || {};
-          
-          // Fallback to sender data if AI extraction is missing fields
-          if (!customerData.name && email.senderName) {
-            customerData.name = email.senderName;
-          }
-          if (!customerData.email && email.from) {
-            customerData.email = email.from;
-          }
-
-          // 3. Helper to sanitize and parse numbers safely
-          const parseSafeNumber = (val) => {
-            if (typeof val === 'number') return val;
-            if (typeof val !== 'string') return 0;
-            const cleaned = val.replace(/,/g, '').replace(/[^\d.-]/g, '');
-            const num = parseFloat(cleaned);
-            return isNaN(num) ? 0 : num;
-          };
-
-          // 4. Normalize items and calculate total with safe parsing
-          const items = (orderData.items || []).map(item => {
-            const qty = parseSafeNumber(item.quantity);
-            const price = parseSafeNumber(item.unitPrice);
-            const itemTotal = parseSafeNumber(item.totalPrice) || (qty * price);
-            
-            return {
-              ...item,
-              quantity: qty || 1, // Default to 1 if we have a price but no qty
-              unitPrice: price,
-              totalPrice: itemTotal
-            };
-          });
-
-          const calculatedTotal = items.reduce((sum, item) => sum + (item.totalPrice || 0), 0);
-          const aiTotal = parseSafeNumber(orderData.totalAmount);
-          
-          // Use calculated total if AI total is missing or significantly different
-          const finalTotal = (aiTotal > 0 && Math.abs(aiTotal - calculatedTotal) < 1) 
-            ? aiTotal 
-            : (calculatedTotal || aiTotal || 0);
-
-          const order = new Order({
-            emailId: email._id,
-            emailTrackingId: email.trackingId,
-            extractedOrderId: orderData.extractedOrderId,
-            customer: customerData,
-            items: items,
-            totalAmount: finalTotal,
-            currency: orderData.currency || 'USD',
-            orderDate: orderData.orderDate ? new Date(orderData.orderDate) : new Date(),
-            status: 'draft',
-            aiConfidence: orderData.confidence,
-            rawExtraction: orderData
-          });
-          
-          await order.save();
-          logger.info('Order extracted and saved to DB', { 
-            orderId: order._id, 
-            dbName: mongoose.connection.name,
-            confidence: orderData.confidence 
-          });
-
-          // Sync to Salesforce (Fire and forget, or handle errors)
-          try {
-            salesforceService.syncOrder(order).catch(err => {
-              logger.error('Background Salesforce sync failed', { error: err.message, orderId: order._id });
-            });
-          } catch (sfErr) {
-            logger.error('Triggering Salesforce sync failed', { error: sfErr.message });
-          }
-          
-          return order;
-      } else {
-        logger.info('No valid order detected by AI (confidence too low)', { confidence: orderData?.confidence });
-        return null; 
+      const rawAiData = await aiService.extractOrderDetails(fullText);
+      const extractedOrders = rawAiData?.orders || [];
+      
+      if (extractedOrders.length === 0) {
+        logger.info('No orders detected by AI', { emailId: email._id });
+        return null;
       }
+
+      const savedOrders = [];
+
+      for (const orderData of extractedOrders) {
+        if (!orderData.items || orderData.items.length === 0) continue;
+
+        const customerData = orderData.customer || {};
+        if (!customerData.name && email.senderName) customerData.name = email.senderName;
+        if (!customerData.email && email.from) customerData.email = email.from;
+
+        const parseSafeNumber = (val) => {
+          if (typeof val === 'number') return val;
+          if (typeof val !== 'string') return 0;
+          return parseFloat(val.replace(/,/g, '').replace(/[^\d.-]/g, '')) || 0;
+        };
+
+        const items = orderData.items.map(item => {
+          const qty = parseSafeNumber(item.quantity) || 1;
+          const price = parseSafeNumber(item.unitPrice);
+          return { ...item, quantity: qty, unitPrice: price, totalPrice: parseSafeNumber(item.totalPrice) || (qty * price) };
+        });
+
+        const order = new Order({
+          emailId: email._id,
+          emailTrackingId: email.trackingId,
+          extractedOrderId: orderData.extractedOrderId,
+          customer: customerData,
+          items: items,
+          totalAmount: parseSafeNumber(orderData.totalAmount) || items.reduce((s, i) => s + i.totalPrice, 0),
+          currency: orderData.currency || 'USD',
+          orderDate: orderData.orderDate ? new Date(orderData.orderDate) : new Date(),
+          status: 'draft',
+          aiConfidence: orderData.confidence || 1.0,
+          rawExtraction: orderData
+        });
+        
+        await order.save();
+        savedOrders.push(order);
+
+        salesforceService.syncOrder(order).catch(err => {
+          logger.error('Background Salesforce sync failed', { error: err.message, orderId: order._id });
+        });
+      }
+
+      logger.info(`Successfully extracted ${savedOrders.length} orders`, { emailId: email._id });
+      return savedOrders.length > 0 ? savedOrders[0] : null;
+
     } catch (err) {
-      logger.error('Order extraction system error', { 
-        error: err.message, 
-        emailTrackingId: email.trackingId 
-      });
+      logger.error('Order extraction system error', { error: err.message, emailTrackingId: email.trackingId });
       throw err;
     }
   }
