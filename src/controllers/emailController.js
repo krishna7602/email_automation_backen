@@ -6,7 +6,7 @@ const Email = require('../models/Email');
 const attachmentFetcher = require('../services/attachmentFetcher');
 const aiService = require('../services/aiService');
 const Order = require('../models/Order');
-const salesforceService = require('../services/salesforceService');
+const businessCentralService = require('../services/businessCentralService');
 
 class EmailController {
   constructor() {
@@ -378,8 +378,8 @@ async processEmailAsync(emailData, trackingId, files = []) {
         await order.save();
         savedOrders.push(order);
 
-        salesforceService.syncOrder(order).catch(err => {
-          logger.error('Background Salesforce sync failed', { error: err.message, orderId: order._id });
+        businessCentralService.syncOrder(order).catch(err => {
+          logger.error('Background Business Central sync failed', { error: err.message, orderId: order._id });
         });
       }
 
@@ -421,13 +421,13 @@ async processEmailAsync(emailData, trackingId, files = []) {
       await order.save();
       logger.info('Email manually converted to order', { orderId: order._id });
 
-      // Sync to Salesforce
+      // Sync to Business Central
       try {
-        salesforceService.syncOrder(order).catch(err => {
-          logger.error('Manual Salesforce sync failed', { error: err.message });
+        businessCentralService.syncOrder(order).catch(err => {
+          logger.error('Manual Business Central sync failed', { error: err.message });
         });
-      } catch (sfErr) {
-        logger.error('Triggering manual Salesforce sync failed', { error: sfErr.message });
+      } catch (bcErr) {
+        logger.error('Triggering manual Business Central sync failed', { error: bcErr.message });
       }
 
       return successResponse(res, order, 'Email converted to order manually');

@@ -52,7 +52,7 @@ const OrderSchema = new mongoose.Schema({
   rawExtraction: {
     type: mongoose.Schema.Types.Mixed // Store full AI JSON response
   },
-  salesforceId: {
+  businessCentralId: {
     type: String,
     default: null
   },

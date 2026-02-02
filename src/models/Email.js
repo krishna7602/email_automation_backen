@@ -81,7 +81,6 @@ const emailSchema = new mongoose.Schema({
   }],
   
   // External system IDs
-  salesforceId: String,
   businessCentralId: String,
   
   // Error tracking
