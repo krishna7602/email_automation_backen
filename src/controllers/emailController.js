@@ -212,11 +212,6 @@ async processEmailAsync(emailData, trackingId, files = []) {
       const limit = parseInt(req.query.limit) || 10;
       const { status, from, priority } = req.query;
 
-      const query = {};
-      if (status) query.processingStatus = status;
-      if (from) query.from = from.toLowerCase();
-      if (priority) query.priority = priority;
-
       const emails = await Email.find(query)
         .sort({ receivedAt: -1 })
         .limit(limit)
@@ -251,11 +246,11 @@ async processEmailAsync(emailData, trackingId, files = []) {
       }
 
       // Also try to find a linked order
-      const order = await Order.findOne({ emailId: email._id });
+      const orders = await Order.find({ emailId: email._id });
 
       return successResponse(res, {
         email,
-        order
+        orders: orders
       });
     } catch (error) {
       logger.error('Error fetching email:', error);
@@ -294,17 +289,18 @@ async processEmailAsync(emailData, trackingId, files = []) {
       await Order.deleteMany({ emailId: email._id });
       
       // Re-trigger extraction
-      let order = null;
+      let orders = [];
       let errorMsg = null;
       
       try {
-        order = await this._attemptOrderExtraction(email);
+        const result = await this._attemptOrderExtraction(email);
+        orders = result || [];
       } catch (err) {
         errorMsg = err.message;
       }
       
-      if (order) {
-        return successResponse(res, { order }, 'Order extracted successfully');
+      if (orders.length > 0) {
+        return successResponse(res, { orders }, `Successfully extracted ${orders.length} orders`);
       } else {
         const message = errorMsg || 'AI finished but no order was detected in the content.';
         return successResponse(res, { 
@@ -337,7 +333,7 @@ async processEmailAsync(emailData, trackingId, files = []) {
       
       if (extractedOrders.length === 0) {
         logger.info('No orders detected by AI', { emailId: email._id });
-        return null;
+        return [];
       }
 
       const savedOrders = [];
@@ -384,7 +380,7 @@ async processEmailAsync(emailData, trackingId, files = []) {
       }
 
       logger.info(`Successfully extracted ${savedOrders.length} orders`, { emailId: email._id });
-      return savedOrders.length > 0 ? savedOrders[0] : null;
+      return savedOrders;
 
     } catch (err) {
       logger.error('Order extraction system error', { error: err.message, emailTrackingId: email.trackingId });
