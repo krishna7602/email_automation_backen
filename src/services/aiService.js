@@ -23,7 +23,15 @@ class AIService {
         You are a highly precise Data Extraction Engine for an automated order processing system.
         
         **YOUR TASK:**
-        Analyze the provided email content (which may contain messy tables, forwarded threads, attachments text, or space-separated lines) and extract **EVERY SINGLE VALID ORDER** as a distinct object.
+        Analyze the provided email content (which may contain messy tables, forwarded threads, attachments text, or space-separated lines) and extract **EVERY VALID ORDER** as a distinct object.
+        
+        **⚠️ CRITICAL: EXHAUSTIVE EXTRACTION - READ THIS CAREFULLY ⚠️**
+        You MUST extract **EVERY SINGLE ROW** from any table you find. 
+        - If you see a table with 12 rows, you MUST create 12 separate item objects in the "items" array.
+        - If you see a table with 50 rows, you MUST create 50 separate item objects.
+        - DO NOT stop after the first few rows.
+        - DO NOT summarize multiple rows into one item.
+        - EACH ROW in a table = ONE ITEM in the items array.
 
         **INPUT TEXT:**
         """
@@ -31,30 +39,64 @@ class AIService {
         """
         
         **CRITICAL PARSING RULES:**
-        1. **ONE ROW = ONE ORDER**: In tabular data or lists, assume **EACH LINE** is a completely separate order unless it is clearly an itemized list for a *single* invoice.
-        2. **CHECK FOR MULTIPLE EMAILS**: Scan the text. If you see multiple DIFFERENT email addresses (e.g. \`john@...\`, \`jane@...\`), you **MUST** split them into separate order objects in the \`orders\` array.
-        3. **DO NOT MERGE**: If you see "ORD-001" and "ORD-002", these are TWO orders. Return 2 objects in the array.
-        4. **Space-Separated Tables**: Parse lines like:
-           \`ORD-001 | John | john@test.com | WIDGET | 5 | 50\`
-           as a unique order.
+        1. **IDENTIFY TABLES**: Look for repeating patterns, column headers (like Sr. No, Finished Good, Last Rate, Quantity Required, MRP), numbered rows (1, 2, 3...), or line-by-line lists.
+        2. **EXTRACT EVERY ROW**: When you find a table structure:
+           - Count the total number of data rows (excluding headers)
+           - Create ONE item object for EACH row
+           - Example: If rows are numbered 1-12, your items array MUST have 12 objects
+        3. **SINGLE vs MULTIPLE ORDERS**:
+           - **Scenario A (Multiple Orders)**: If different lines have different Customer Names, different Email Addresses, or explicit "Purchase Order Numbers" per line, treat them as separate orders.
+           - **Scenario B (Single Order with Multiple Items)**: If all items seem to belong to the same customer/sender and share the same context, treat them as MANY items within a SINGLE order object. **THIS IS THE MOST COMMON CASE FOR TABLES.**
+        4. **DO NOT SUMMARIZE**: Extract each line item separately with its own quantity and price.
+        5. **COLUMN MAPPING**: Map table columns to item fields:
+           - "Finished Good" / "Description" / "Item" → description
+           - "Last Rate" / "Unit Price" / "Rate" / "Price" → unitPrice
+           - "Quantity Required" / "Qty" / "Quantity" → quantity
+           - "Sr. No" / "#" → can be used for ordering but not required
 
-        **SCENARIO HANDLING:**
-        - **Scenario A (Bulk Report)**: You see a list of 4 people buying things. -> Return 4 separate Order objects.
-        - **Scenario B (Single Invoice)**: You see one person buying 4 things. -> Return 1 Order object with 4 Items.
-
-        **Your Data Interpretation Priority:**
-        If you see **Order IDs** (ORD-001, ORD-002...) or **Different Names/Emails**, default to **Scenario A (Multiple Orders)**.
-        
-        **DATA EXAMPLE (If found, extract as separate orders):**
+        **EXAMPLE: Table with 12 Items (ALL must be extracted)**
         Input:
-        ORD-001 John Doe john@test.com WIDGET-A 5 10 50 123 Main St, NY
-        ORD-002 Jane Smith jane@test.com GADGET-B 1 150 150 456 Elm St, CA
+        From: Ramkrishna Mondal <ramkrishnam170@gmail.com>
         
-        Output:
-        [
-          { "extractedOrderId": "ORD-001", "customer": { "email": "john@test.com", ... } },
-          { "extractedOrderId": "ORD-002", "customer": { "email": "jane@test.com", ... } }
-        ]
+        Sr. No | Finished Good                              | Last Rate | Quantity Required
+        1      | Heybuddie Dog Shampoo (500ml)             | 76.52     | 100
+        2      | Heybuddie Dog Conditioner (500ml)         | 74.50     | 125
+        3      | Heybuddie Dog Tick & Flea Shampoo (500ml) | 77.30     | 356
+        4      | Heybuddie Pup Shampoo (500ml)             | 76.50     | 58
+        5      | Heybuddie Pet Cologne (Citrus Paradise)   | 21.20     | 789
+        6      | Heybuddie Pet Cologne (Lavender Dreams)   | 23.50     | 8897
+        7      | Heybuddie Ticks Spray (200ml)             | 50.60     | 89
+        8      | Heybuddie Paw Butter (100g)               | 53.00     | 65
+        9      | Heybuddie Dog Shampoo (200ml)             | 31.80     | [blank]
+        10     | Heybuddie Ear Cleaner (100 ml)            | 25.50     | 54
+        11     | Heybuddie Foaming Paw Cleaner (150ml)     | 51.50     | 98
+        12     | Heybuddie Omega 369 (200ml)               | 74.00     | 54
+        
+        Expected Output:
+        {
+          "orders": [
+            {
+              "extractedOrderId": "ORDER-001",
+              "customer": { "name": "Ramkrishna Mondal", "email": "ramkrishnam170@gmail.com" },
+              "items": [
+                { "description": "Heybuddie Dog Shampoo (500ml)", "quantity": 100, "unitPrice": 76.52, "totalPrice": 7652.00 },
+                { "description": "Heybuddie Dog Conditioner (500ml)", "quantity": 125, "unitPrice": 74.50, "totalPrice": 9312.50 },
+                { "description": "Heybuddie Dog Tick & Flea Shampoo (500ml)", "quantity": 356, "unitPrice": 77.30, "totalPrice": 27518.80 },
+                { "description": "Heybuddie Pup Shampoo (500ml)", "quantity": 58, "unitPrice": 76.50, "totalPrice": 4437.00 },
+                { "description": "Heybuddie Pet Cologne (Citrus Paradise) (100ml)", "quantity": 789, "unitPrice": 21.20, "totalPrice": 16726.80 },
+                { "description": "Heybuddie Pet Cologne (Lavender Dreams)(100ml)", "quantity": 8897, "unitPrice": 23.50, "totalPrice": 209079.50 },
+                { "description": "Heybuddie Ticks Spray (200ml)", "quantity": 89, "unitPrice": 50.60, "totalPrice": 4503.40 },
+                { "description": "Heybuddie Paw Butter (100g)", "quantity": 65, "unitPrice": 53.00, "totalPrice": 3445.00 },
+                { "description": "Heybuddie Dog Shampoo (200ml)", "quantity": 0, "unitPrice": 31.80, "totalPrice": 0 },
+                { "description": "Heybuddie Ear Cleaner (100 ml)", "quantity": 54, "unitPrice": 25.50, "totalPrice": 1377.00 },
+                { "description": "Heybuddie Foaming Paw Cleaner (150ml)", "quantity": 98, "unitPrice": 51.50, "totalPrice": 5047.00 },
+                { "description": "Heybuddie Omega 369 (200ml)", "quantity": 54, "unitPrice": 74.00, "totalPrice": 3996.00 }
+              ],
+              "totalAmount": 293095.00,
+              "currency": "USD"
+            }
+          ]
+        }
 
         **OUTPUT SCHEMA (Strict JSON):**
         Return a JSON object containing an array named "orders".
@@ -80,7 +122,7 @@ class AIService {
                  }
               ],
               "totalAmount": number,
-              "currency": "string (e.g. USD)",
+              "currency": "string (e.g. USD, INR)",
               "orderDate": "string (ISO 8601, optional)",
               "confidence": number
             }
