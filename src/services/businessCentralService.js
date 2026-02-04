@@ -3,12 +3,17 @@ const logger = require('../utils/logger');
 
 class BusinessCentralService {
   constructor() {
+    this.disabled = process.env.DISABLE_BC_SYNC === 'true';
     this.baseUrl = process.env.BC_API_URL || 'https://api.businesscentral.dynamics.com/v2.0/sandbox/api/v2.0';
     this.authConfig = {
       username: process.env.BC_USERNAME,
       password: process.env.BC_PASSWORD // Web Service Access Key for Basic Auth
     };
     this.companyId = process.env.BC_COMPANY_ID;
+    
+    if (this.disabled) {
+      logger.info('⚠️  Business Central sync is DISABLED (DISABLE_BC_SYNC=true)');
+    }
   }
 
   get headers() {
@@ -42,6 +47,14 @@ class BusinessCentralService {
   }
 
   async syncOrder(orderData) {
+    // Skip if Business Central sync is disabled
+    if (this.disabled) {
+      logger.info('⏭️  Skipping Business Central sync (disabled)', { orderId: orderData._id });
+      orderData.syncStatus = 'skipped';
+      await orderData.save();
+      return null;
+    }
+
     try {
       if (!this.companyId) await this.testConnection();
 
