@@ -3,9 +3,12 @@ const router = express.Router();
 const orderController = require('../controllers/orderController');
 
 router.get('/stats', (req, res) => orderController.getOrderStats(req, res));
+router.get('/sync-stats', (req, res) => orderController.getSyncStats(req, res));
+router.get('/test-bc-connection', (req, res) => orderController.testBCConnection(req, res));
 router.get('/', (req, res) => orderController.getAllOrders(req, res));
 router.get('/:id', (req, res) => orderController.getOrderById(req, res));
 router.put('/:id', (req, res) => orderController.updateOrder(req, res));
 router.delete('/:id', (req, res) => orderController.deleteOrder(req, res));
+router.post('/:id/sync', (req, res) => orderController.syncToBC(req, res));
 
 module.exports = router;

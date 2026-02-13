@@ -33,11 +33,19 @@ const startServer = async () => {
         try {
           logger.info('Checking for new emails...');
           await gmailFetcher.fetchUnreadEmails();
-        } catch (err) {
-          logger.error('Gmail polling failed', err);
-        } finally {
-          // Schedule next poll only after current one is done
+          
+          // If successful, schedule next poll normally
           setTimeout(pollGmail, 30 * 1000);
+        } catch (err) {
+          if (err.message === 'invalid_grant' || err.data?.error === 'invalid_grant') {
+            logger.error('🔴 GMAIL AUTHENTICATION FAILED: Token expired or revoked.');
+            logger.error('👉 ACTION REQUIRED: Please re-authenticate at http://localhost:3000/api/auth/gmail/connect');
+            logger.info('⏳ Polling paused. Server will retry in 5 minutes, or restart after re-authenticating.');
+            setTimeout(pollGmail, 5 * 60 * 1000); // 5 minute wait for auth issues
+          } else {
+            logger.error('Gmail polling failed', err);
+            setTimeout(pollGmail, 30 * 1000);
+          }
         }
       };
 

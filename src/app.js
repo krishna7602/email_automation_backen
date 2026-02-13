@@ -58,6 +58,20 @@ app.get('/health', (req, res) => {
   });
 });
 
+// ---------------------------------------------------------
+// 🚀 EMERGENCY AUTH ALIASES (Placed at ROOT for 100% reach)
+// ---------------------------------------------------------
+app.get(['/connect', '/gmail-connect', '/auth-test'], (req, res) => {
+  logger.info('⚡ Root-level auth alias triggered');
+  res.redirect('/api/auth/gmail/connect');
+});
+
+// Handle the common typos or missing /api/
+app.get(['/auth/gmail/connect', '/auth/google'], (req, res) => {
+  res.redirect('/api/auth/gmail/connect');
+});
+// ---------------------------------------------------------
+
 // --------------------
 // Test Error
 // --------------------
@@ -68,9 +82,48 @@ app.get('/test-error', (req, res, next) => {
 });
 
 // --------------------
+// Debug Request Logger
+// --------------------
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'development') {
+    logger.info(`🔍 [${req.method}] ${req.url}`, {
+      originalUrl: req.originalUrl,
+      query: req.query,
+      ip: req.ip
+    });
+  }
+  next();
+});
+
+// --------------------
 // API Routes
 // --------------------
+// Robust fix for duplicated API paths (e.g., /api/api/auth/...)
+app.use((req, res, next) => {
+  if (req.originalUrl.startsWith('/api/api')) {
+    const cleanPath = req.originalUrl.replace(/^\/api\/api+/, '/api');
+    logger.warn(`🔄 Fixing duplicated API path on Render: ${req.originalUrl} -> ${cleanPath}`);
+    return res.redirect(cleanPath);
+  }
+  next();
+});
+
 app.use('/api', routes);
+
+// 🔹 AGGRESSIVE AUTH ALIASES
+// Catch every possible variation to ensure user never hits a 404 during auth
+app.get([
+  '/api/auth/google', 
+  '/api/api/auth/google',
+  '/api/auth/gmail',
+  '/auth/gmail',
+  '/auth/google',
+  '/api/auth/google/connect',
+  '/api/api/auth/gmail/connect'
+], (req, res) => {
+  logger.info(`🔀 Redirecting legacy/alternative auth path: ${req.originalUrl}`);
+  res.redirect('/api/auth/gmail/connect');
+});
 
 // --------------------
 // Error Handling

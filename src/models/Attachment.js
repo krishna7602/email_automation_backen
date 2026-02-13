@@ -45,7 +45,7 @@ const attachmentSchema = new mongoose.Schema({
   },
   
   // Error tracking
-  errors: [{
+  errorLogs: [{
     stage: String,
     message: String,
     timestamp: Date

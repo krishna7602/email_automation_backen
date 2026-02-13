@@ -56,12 +56,28 @@ const OrderSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  businessCentralOrderNumber: {
+    type: String,
+    default: null
+  },
   syncStatus: {
     type: String,
-    enum: ['pending', 'synced', 'failed'],
+    enum: ['pending', 'synced', 'failed', 'skipped'],
     default: 'pending'
   },
   syncError: String,
+  syncedAt: {
+    type: Date,
+    default: null
+  },
+  syncAttempts: {
+    type: Number,
+    default: 0
+  },
+  lastSyncAttempt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

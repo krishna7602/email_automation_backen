@@ -84,7 +84,7 @@ const emailSchema = new mongoose.Schema({
   businessCentralId: String,
   
   // Error tracking
-  errors: [{
+  errorLogs: [{
     stage: String,
     message: String,
     timestamp: Date
@@ -110,7 +110,7 @@ emailSchema.methods.updateStatus = function(status) {
 
 // Add error
 emailSchema.methods.addError = function(stage, message) {
-  this.errors.push({
+  this.errorLogs.push({
     stage,
     message,
     timestamp: new Date()

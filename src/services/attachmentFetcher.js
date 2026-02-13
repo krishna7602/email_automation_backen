@@ -57,7 +57,7 @@ class AttachmentFetcher {
         error: err.message
       });
 
-      attachment.errors.push({
+      attachment.errorLogs.push({
         stage: 'processing',
         message: err.message,
         timestamp: new Date()

@@ -211,6 +211,11 @@ async processEmailAsync(emailData, trackingId, files = []) {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 10;
       const { status, from, priority } = req.query;
+      const query = {};
+
+      if (status) query.processingStatus = status;
+      if (from) query.from = { $regex: from, $options: 'i' };
+      if (priority) query.priority = priority;
 
       const emails = await Email.find(query)
         .sort({ receivedAt: -1 })

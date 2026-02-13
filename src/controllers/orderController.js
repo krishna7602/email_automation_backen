@@ -114,6 +114,58 @@ class OrderController {
       return errorResponse(res, error.message, 500);
     }
   }
+
+  async syncToBC(req, res) {
+    try {
+      const order = await Order.findById(req.params.id);
+      if (!order) {
+        return errorResponse(res, 'Order not found', 404);
+      }
+
+      const businessCentralService = require('../services/businessCentralService');
+      const result = await businessCentralService.syncOrder(order, true); // true for force sync
+
+      return successResponse(res, result, 'Order synced to Business Central successfully');
+    } catch (error) {
+      logger.error('Manual BC sync failed:', error);
+      return errorResponse(res, error.message, 500);
+    }
+  }
+
+  async testBCConnection(req, res) {
+    try {
+      const businessCentralService = require('../services/businessCentralService');
+      
+      if (businessCentralService.disabled) {
+        return successResponse(res, { 
+          disabled: true,
+          message: 'Business Central sync is currently disabled (DISABLE_BC_SYNC=true)'
+        });
+      }
+
+      const result = await businessCentralService.testConnection();
+      return successResponse(res, result, 'Business Central connection successful');
+    } catch (error) {
+      logger.error('BC connection test failed:', error);
+      return errorResponse(res, error.message, 500);
+    }
+  }
+
+  async getSyncStats(req, res) {
+    try {
+      const businessCentralService = require('../services/businessCentralService');
+      const stats = await businessCentralService.getSyncStats();
+      
+      return successResponse(res, {
+        ...stats,
+        bcSyncEnabled: !businessCentralService.disabled,
+        companyId: businessCentralService.companyId || 'Not set'
+      });
+    } catch (error) {
+      logger.error('Error fetching sync stats:', error);
+      return errorResponse(res, error.message, 500);
+    }
+  }
 }
 
 module.exports = new OrderController();
